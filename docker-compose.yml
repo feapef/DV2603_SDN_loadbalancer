@@ -1,0 +1,9 @@
+services: 
+  web:
+    image: nginx_web
+    ports:
+      - 8080:80
+    deploy:
+      mode: replicas
+      replicas: 3
+      endpoint_mode: vip
