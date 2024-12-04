@@ -2,6 +2,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/epoll.h>
 #include <unistd.h>
 
 #include <netinet/ip.h>
@@ -27,15 +28,31 @@
 
 // DECLARE VARIABLES
 #define PORT_IN 8080
-#define PORT_OUT 8081
-//#define IP_IN "172.0.0.2"
 #define IP_IN "0.0.0.0"
-#define IP_OUT "0.0.0.0"
+
+#define PORT_OUT 80
+#define IP_OUT "192.168.4.4"
+
+//#define PORT_OUT 8081
+//#define IP_OUT "0.0.0.0"
 #define MAXPENDING 20
 #define BUFFSIZE 4096
 #define MAXSOCKET 64
+#define MAX_FORWARD_SERVER 3
 
-int init_server(char ip_server[INET_ADDRSTRLEN],int port_server){
+struct forward_server{
+    struct in_addr ip;
+    int port;
+};
+
+void printf_ip(struct in_addr a){
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &a, ip, INET_ADDRSTRLEN);
+    printf("%s",ip); 
+    return;
+}
+
+int init_server(struct in_addr ip_server,int port_server){
     int option = 1;
     int server_fd;
     struct sockaddr_in addr_server;
@@ -51,10 +68,10 @@ int init_server(char ip_server[INET_ADDRSTRLEN],int port_server){
     */
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     // to remove the waiting time after closing the connection
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
     if(server_fd==-1){
         DIE("server socket");
     }
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
     printf("[SERVER] socket created \n");
     printf("[SERVER] file descriptor : %d \n",server_fd);
 
@@ -62,7 +79,7 @@ int init_server(char ip_server[INET_ADDRSTRLEN],int port_server){
      * man 2 bind */
     addr_server.sin_family=AF_INET;
     addr_server.sin_port=htons(port_server);
-    inet_pton(AF_INET,ip_server, &(addr_server.sin_addr));
+    addr_server.sin_addr=ip_server;
     // need to see the struct to zero for the padding at the end
     memset(addr_server.sin_zero,'\0',sizeof(addr_server.sin_zero));
     if(bind(server_fd,(struct sockaddr *)&addr_server,sizeof(addr_server))==-1){
@@ -107,18 +124,19 @@ int accept_new_client(int server_fd){
     printf("[SERVER] Client connected at socket %d from IP: %s, Port: %d\n",client_fd,ip_client,port_client);
     return client_fd;
 }
-int connect_new_forward(char ip_forward[INET_ADDRSTRLEN],int port_forward ){
+int connect_new_forward(struct forward_server fs){
     int option = 1;
     int forward_fd;
     struct sockaddr_in addr_forward;
     /* create socket */
+
     forward_fd = socket(AF_INET, SOCK_STREAM, 0);
     setsockopt(forward_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 
     /* connect */
     addr_forward.sin_family=AF_INET;
-    addr_forward.sin_port=htons(PORT_OUT);
-    inet_pton(AF_INET,IP_OUT, &(addr_forward.sin_addr));
+    addr_forward.sin_port=htons(fs.port);
+    addr_forward.sin_addr=fs.ip;
     // need to see the struct to zero for the padding at the end
     memset(addr_forward.sin_zero,'\0',sizeof(addr_forward.sin_zero));
     if(connect(forward_fd,(struct sockaddr *)&addr_forward,sizeof(addr_forward))==-1){
@@ -136,7 +154,6 @@ void close_connection(int fd){
         printf("[%d]",fd);
         DIE(" connection closed");
     }
-    exit(0);
 }
 
 int com(int src,int dst){
@@ -148,64 +165,109 @@ int com(int src,int dst){
         DIE("recv client");
     }
     if(numBytesRcvd==0){
-        printf("[SERVER] End of communication between %d and %d",src,dst);
+        printf("[SERVER] End of communication between %d and %d\n",src,dst);
+        shutdown(src, SHUT_WR);
+        shutdown(dst, SHUT_RD);
         close_connection(src);
         close_connection(dst);
         return 1;
     }
-    printf("[SERVER %d -> %d] new message received : \n",src,dst);
-    printf("%s\n",buffer);
     if(send(dst, buffer, numBytesRcvd, 0)<0){
             DIE("send to forward");
     }
-    printf("[SERVER %d -> %d] following message sent : %s\n",src,dst,buffer);
+    printf("[SERVER %d -> %d] new message forwarded : \n",src,dst);
+    printf("%s\n",buffer);
     return 0;
+}
+int round_robin(int current,int max){
+    return (current+1)%max;
 }
 
 int main(int argc, char *argv[]){
-    int client_fd,forward_fd,dst;
-    int server_fd=init_server(IP_IN,PORT_IN);
-    fd_set current_fd,ready_fd;
-    uint16_t socket_map[MAXSOCKET];
+    int client_fd,forward_fd,src,dst,server_fd;
+    struct in_addr addr_server;
+    inet_pton(AF_INET,IP_IN, &(addr_server));
 
-    // initialize my current set
-    FD_ZERO(&current_fd);
-    FD_SET(server_fd, &current_fd);
+    struct forward_server fs;
+    struct forward_server forward_list[MAX_FORWARD_SERVER];
+    struct in_addr addr_forward;
+    int current_forward=0;
+    for (int i=0;i<MAX_FORWARD_SERVER;i++){
+        /*
+        inet_pton(AF_INET,IP_OUT, &(addr_forward));
+        addr_forward.s_addr=addr_forward.s_addr+1;
+        forward_list[i].ip=;
+        printf("[%d] ",i);
+        printf_ip(forward_list[i].ip);
+        printf("\n");
+        */
+        forward_list[i].port=PORT_OUT;
+    }
+    inet_pton(AF_INET,"192.168.4.4", &forward_list[0].ip);
+    inet_pton(AF_INET,"192.168.4.5", &forward_list[1].ip);
+    inet_pton(AF_INET,"192.168.4.6", &forward_list[2].ip);
+
+    // For multiple fd monitoring
+    uint16_t socket_map[MAXSOCKET];
+    int numEvents;
+    int epoll_fd;
+    struct epoll_event event, events[MAXSOCKET];
+
+    // initialize server socket
+    server_fd=init_server(addr_server,PORT_IN);
+
+    // initialize my current epoll
+    epoll_fd=epoll_create1(0);
+    if(epoll_fd==-1){
+        DIE("epoll create");
+    }
+    
+    //add server_fd to epoll set
+    event.events=EPOLLIN;
+    event.data.fd=server_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event)==-1){
+        DIE("epoll_ctl server")
+    }
 
     while(true){
-        // because select is destructive
-        printf("Waiting for new connection...\n");
-        ready_fd=current_fd;
-        if (select(MAXSOCKET, &ready_fd, NULL, NULL, NULL)<0){
-            DIE("select :");
+        printf("[SERVER] Waiting for new connection...\n");
+        numEvents=epoll_wait(epoll_fd,events,MAXSOCKET,-1);
+        if(numEvents==-1){
+            printf("[SERVER] Fail to wait for event");
         }
-        for (int i=0;i<MAXSOCKET;i++){
-            if(FD_ISSET(i, &ready_fd)){
-                printf("[SERVER] New fd connection %d\n",i);
-                if(i==server_fd) {
-                    client_fd=accept_new_client(server_fd);
-
-                    // TO DO: 
-                    //  - manage multiple choices forwards
-                    //  - implement Round Robin
-                    forward_fd=connect_new_forward(IP_OUT,PORT_OUT);
-
-                    // ISSUE: 
-                    //  - fd can be greater than MAXSOCKET 
-                    //      -> linux command : ulimit -n MAXSOCKET
-                    socket_map[forward_fd]=client_fd;
-                    socket_map[client_fd]=forward_fd;
-                    FD_SET(client_fd, &current_fd);
-                    FD_SET(forward_fd, &current_fd);
+        for(int i=0;i<numEvents;i++){
+            src=events[i].data.fd;
+            printf("[SERVER] New fd connection %d\n",src);
+            if(src==server_fd) {
+                client_fd=accept_new_client(server_fd);
+                fs=forward_list[current_forward];
+                printf("[SERVER %d] Attempt to connect forward server ",current_forward);
+                printf_ip(fs.ip);
+                printf(":%d\n",fs.port);
+                // TO DO: 
+                //  - manage multiple choices forwards
+                //  - implement Round Robin
+                forward_fd=connect_new_forward(forward_list[current_forward]);
+                current_forward=round_robin(current_forward,MAX_FORWARD_SERVER);
+                socket_map[forward_fd]=client_fd;
+                event.events = EPOLLIN;
+                event.data.fd = client_fd;
+                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) == -1) {
+                    DIE("error epoll client_fd")
                 }
-                else {
-                    dst=socket_map[i];
-                    if (dst<0) {
-                        DIE("socket map")
-                    }
-                    com(i,dst);
-                    FD_CLR(i, &current_fd);
+                socket_map[client_fd]=forward_fd;
+                event.events = EPOLLIN;
+                event.data.fd = forward_fd;
+                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, forward_fd, &event) == -1) {
+                    DIE("error epoll forward_fd")
                 }
+            }
+            else {
+                dst=socket_map[src];
+                if (dst<0) {
+                    DIE("socket map")
+                }
+                com(src,dst);
             }
         }
     }
