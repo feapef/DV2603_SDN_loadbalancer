@@ -1,9 +1,29 @@
-services: 
+services:
   web:
     image: nginx_web
+    expose :
+      - "80"
+    networks:
+      backend:
+        ipv4_address: 192.168.4.4
+
+  loadbalancer:
+    image: gcc
+    command: sleep 3000
     ports:
-      - 8080:80
-    deploy:
-      mode: replicas
-      replicas: 3
-      endpoint_mode: vip
+      - "8081:8081"
+    networks:
+      backend:
+          ipv4_address: 192.168.4.2
+      external_network:
+    volumes:
+      - ./loadbalancer/:/app/loadbalancer
+
+networks:
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 192.168.4.0/24
+          ip_range: 192.168.4.0/24
+  external_network:
