@@ -1,7 +1,0 @@
-service :
-  loadbalancer:
-    image: alpine
-    container_name: loadbalancer
-    volumes: 
-      - .:/app/loadbalancer
-    

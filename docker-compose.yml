@@ -1,25 +1,22 @@
 services:
-  web-1:
+  webserver:
     image: nginx_web
     expose :
       - "80"
     networks:
       backend:
-        ipv4_address: 192.168.4.4
-  web-2:
-    image: nginx_web
-    expose :
-      - "80"
-    networks:
-      backend:
-        ipv4_address: 192.168.4.5
-  web-3:
-    image: nginx_web
-    expose :
-      - "80"
-    networks:
-      backend:
-        ipv4_address: 192.168.4.6
+    volumes:
+      - html:/opt/html/:ro
+      - nginx/conf.d:/etc/nginx/conf.d:ro
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: vip
+      ressources: 
+        limits:
+          cpus: '0.20'
+          memory: 50M
+
   loadbalancer:
     image: gcc
     command: sleep 3000

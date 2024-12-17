@@ -1,4 +1,7 @@
 FROM nginx
-ENV HOST="default-hostname"
-COPY index.html /usr/share/nginx/html/index.html
-
+RUN apt-get update \
+    && apt-get install -y netcat-openbsd\
+    && apt-get install -y iproute2 \
+    && apt-get install -y procps 
+COPY init_server.sh .
+CMD sleep 30000
