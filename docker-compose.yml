@@ -1,6 +1,8 @@
 services:
   webserver:
-    image: nginx_web
+    build:
+      context: ./nginx_webserver
+      dockerfile: ./Dockerfile
     networks:
       backend:
     volumes:
@@ -15,7 +17,12 @@ services:
 
   loadbalancer:
     image: gcc
-    command: sleep 3000
+    working_dir: /app/loadbalancer/
+    command: bash -c "
+      pwd && 
+      make clean && 
+      make && 
+      ./lb"
     ports:
       - "8080:8080"
     networks:
