@@ -13,8 +13,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <error.h>
-#include <signal.h>
 #include <stdbool.h>
+
+// LOCAL LIBRARY
+#include "linked_list.h"
 
 /* sources: 
  * https://beej.us/guide/bgnet/html/
@@ -43,6 +45,7 @@
 #define MAXSOCKET 64
 #define MAX_FORWARD_SERVER 3
 
+// DEFINE STRUCTURE
 struct forward_server{
     struct in_addr ip;
     float cpu_ratio;
@@ -89,7 +92,7 @@ int init_server(struct in_addr ip_server,int port_server){
         close(server_fd);
         DIE("server bind");
     }
-    printf("[SERVER IN] socket binded to the port %d\n",PORT_IN);
+    printf("[SERVER IN] socket binded to the port %d\n",port_server);
 
     /* start listening*/ 
     if(listen(server_fd, MAXPENDING)==-1){
@@ -145,7 +148,7 @@ int connect_new_forward(struct forward_server fs){
     if(connect(forward_fd,(struct sockaddr *)&addr_forward,sizeof(addr_forward))==-1){
         DIE("connect");
     }
-    printf("[SERVER] Forward connected at the fd %d \n",forward_fd);
+    printf("[SERVER] Forward connected at the fd %d, ratio cpu : %f \n",forward_fd,fs.cpu_ratio);
     return forward_fd;
 }
 
@@ -158,34 +161,37 @@ void close_connection(int fd){
         DIE(" connection closed");
     }
 }
-int parse_cp(int src){
+void parse_cp(int src,linked_list *fl){
     char buffer[BUFFSIZE];
     int numBytesRcvd;
 
     char code[8], ip_forward[INET_ADDRSTRLEN];
-    float ratio=0.0;
+    float load=0.0;
     int nb_words;
 
     numBytesRcvd = recv(src, buffer, BUFFSIZE, 0);
     if(numBytesRcvd<0){
         DIE("recv control plane");
     }
-    nb_words=sscanf(buffer,"%s %s %d",code,ip_forward,ratio);
+    nb_words=sscanf(buffer,"%s %s %f",code,ip_forward,&load);
     if(nb_words==2){
         if(strcmp(code,"STOP")==0){
-            // to do remove the forward_server from the list and decrease the number of servers 
+            rm(fl,ip_forward);
         }
         else { DIE("buffer pattern") }
     }
     else if (nb_words==3) {
         if(strcmp(code,"NEW")==0){
+            add(fl, ip_forward, load);
         }
         else if (strcmp(code,"CHECK")==0){
+            set_load(fl, ip_forward, load);
         }
         else { DIE("buffer pattern") }
     }
     else { DIE("buffer pattern") }
 }
+
 int com(int src,int dst){
     char buffer[BUFFSIZE];
     int numBytesRcvd;
@@ -195,7 +201,7 @@ int com(int src,int dst){
         DIE("recv client");
     }
     if(numBytesRcvd==0){
-        printf("[SERVER] End of communication between %d and %d\n",src,dst);
+        //printf("[SERVER] End of communication between %d and %d\n",src,dst);
         shutdown(src, SHUT_WR);
         shutdown(dst, SHUT_RD);
         close_connection(src);
@@ -205,56 +211,75 @@ int com(int src,int dst){
     if(send(dst, buffer, numBytesRcvd, 0)<0){
             DIE("send to forward");
     }
-    printf("[SERVER %d -> %d] new message forwarded : \n",src,dst);
-    printf("%s\n",buffer);
+    //printf("[SERVER %d -> %d] new message forwarded : \n",src,dst);
+    //printf("%s\n",buffer);
     return 0;
 }
-int round_robin(int current,int max){
-    return (current+1)%max;
+struct forward_server round_robin(int *count,linked_list *fl){
+    // Perform Round_Robin scheduling algorithm
+    struct forward_server fs;
+    node* current=fl->first;
+
+    // In case some web server has been removed
+    *count=*count % (fl->size);
+    for (int i=0;i<*count;i++){
+        current=current->next;
+    }
+    
+    inet_pton(AF_INET,current->ip,&(fs.ip));
+    fs.cpu_ratio=current->load;
+    *count=(*count+1) % (fl->size);
+    return fs;
 }
 
 int main(int argc, char *argv[]){
+    // DEFINE ALL FILE DESCRIPTOR VARIABLES (FD)
     int client_fd,forward_fd,src,dst,server_fd,cp_fd,tmp_fd;
-    int number_forward_server=0;
+
     struct in_addr addr_server;
 
+    //  DEFINE VARIABLES FOR FORWARD SERVERS
+    linked_list *forward_list;
     struct forward_server fs;
-    struct forward_server forward_list[MAX_FORWARD_SERVER];
-    struct in_addr addr_forward;
+    // for the round robin count
     int current_forward=0;
 
-    // For multiple fd monitoring
+
+    // INITIALIZE SERVER SOCKET
+    inet_pton(AF_INET,IP_IN, &(addr_server));
+    server_fd=init_server(addr_server,PORT_IN);
+
+    // INITIALIZE SERVER SOCKET FOR CONTROL PLANE
+    inet_pton(AF_INET,IP_CP, &(addr_server));
+    cp_fd=init_server(addr_server,PORT_CP);
+
+    // INITIALIZE FORWARD_LIST
+    forward_list=init();
+
+    // INITIALIZE MY CURRENT EPOLL
     uint16_t socket_map[MAXSOCKET];
     int numEvents;
     int epoll_fd;
     struct epoll_event event, events[MAXSOCKET];
-
-    // initialize server socket
-    inet_pton(AF_INET,IP_IN, &(addr_server));
-    server_fd=init_server(addr_server,PORT_IN);
-
-    inet_pton(AF_INET,IP_CP, &(addr_server));
-    cp_fd=init_server(addr_server,PORT_CP);
-
-    // initialize my current epoll
     epoll_fd=epoll_create1(0);
     if(epoll_fd==-1){
         DIE("epoll create");
     }
     
-    //add server_fd to epoll set
+    //ADD SERVER_FD TO EPOLL SET
     event.events=EPOLLIN;
     event.data.fd=server_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event)==-1){
         DIE("epoll_ctl server")
     }
     
-    //add cp_fd to epoll set
+    //ADD CP_FD TO EPOLL SET
     event.data.fd=cp_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cp_fd, &event)==-1){
         DIE("epoll_ctl server cp")
     }
 
+    // INFINITE LOOP TO ALWAYS LISTEN TO 
     while(true){
         printf("[SERVER] Waiting for new connection...\n");
         numEvents=epoll_wait(epoll_fd,events,MAXSOCKET,-1);
@@ -264,13 +289,14 @@ int main(int argc, char *argv[]){
         for(int i=0;i<numEvents;i++){
             src=events[i].data.fd;
             printf("[SERVER] New fd connection %d\n",src);
+
             if(src==server_fd) {
+                // CONNECTION FROM A NEW CLIENT
                 client_fd=accept_new_client(server_fd);
-                fs=forward_list[current_forward];
+                fs=round_robin(&current_forward, forward_list);
                 printf("[SERVER %d] Attempt to connect forward server ",current_forward);
                 printf_ip(fs.ip);
-                forward_fd=connect_new_forward(forward_list[current_forward]);
-                current_forward=round_robin(current_forward,number_forward_server);
+                forward_fd=connect_new_forward(fs);
                 socket_map[forward_fd]=client_fd;
                 event.events = EPOLLIN;
                 event.data.fd = client_fd;
@@ -285,16 +311,13 @@ int main(int argc, char *argv[]){
                 }
             }
             else if(src==cp_fd){
+                // NEW MESSAGE FROM CONTROL PLANE
                 tmp_fd=accept_new_client(cp_fd);
-
-                event.events = EPOLLIN;
-                event.data.fd = client_fd;
-                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) == -1) {
-                    DIE("error epoll client_fd")
-                }
+                parse_cp(tmp_fd, forward_list);
                 close(tmp_fd);
             }
             else {
+                // NEW MESSAGE TO FORWARD
                 dst=socket_map[src];
                 if (dst<0) {
                     DIE("socket map")

@@ -6,9 +6,9 @@ To spice the challenge, I chose to code in C langage.
 
 ### TO DO:
  - [ ] Improve the webpage  (nginx)
- - [ ] Print hostname on the webpage (nginx + docker)
- - [ ] Connect webserver to the same webpage (docker)
- - [ ] Autostart the program (docker)
+ - [X] Print hostname on the webpage (nginx + docker)
+ - [X] Connect webserver to the same webpage (docker)
+ - [X] Autostart the program (docker)
  - [X] Script the scalability (bash + docker)
  - [X] Create a control plane (docker + c)
  - [ ] Improve logging on loadbalancer program (c)
