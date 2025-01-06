@@ -314,7 +314,7 @@ int main(int argc, char *argv[]){
                 // NEW MESSAGE FROM CONTROL PLANE
                 tmp_fd=accept_new_client(cp_fd);
                 parse_cp(tmp_fd, forward_list);
-                close(tmp_fd);
+                close_connection(tmp_fd);
             }
             else {
                 // NEW MESSAGE TO FORWARD
