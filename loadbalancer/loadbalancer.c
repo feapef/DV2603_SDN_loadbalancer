@@ -156,8 +156,8 @@ int connect_new_forward(struct forward_server fs){
 void close_connection(int fd){
     /* Closing socket 
      */
+    printf("[SERVER (fd:%d)] Socket closed\n",fd);
     if(close(fd)==-1) {
-        printf("[%d]",fd);
         DIE(" connection closed");
     }
 }
