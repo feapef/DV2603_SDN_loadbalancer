@@ -19,20 +19,20 @@ send_message (){
 # Catch docker container stop to execute a last command
 trap 'send_message "STOP $IP_ADDRESS";exit 1' SIGTERM SIGQUIT 
 
-
 ### COMMANDS
-
-## Modify the webhtml page
-for f in /opt/html/*; do envsubst < $f > $f-tmp ; mv $f-tmp $f ; done
-
 ## NGINX INIT
 # start nginx in daemon mode
-nginx 1>/dev/null 2>&1 &
+nginx 
 # nginx-debug for debugging
 
 ## CONTROL PLANE
 # send init message
 # retry until it's not connected
+
+## Modify the webhtml page
+echo $IP_ADDRESS
+for f in /opt/html/*; do envsubst < $f > $f-tmp ; mv $f-tmp $f ; done
+
 CPU_USAGE="$(ps -eo %cpu --no-headers | awk '{s+=$1} END {print s}')"
 while ! send_message "NEW $IP_ADDRESS $CPU_USAGE" ; do 
     sleep 1

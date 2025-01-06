@@ -163,17 +163,16 @@ void close_connection(int fd){
 }
 void parse_cp(int src,linked_list *fl){
     char buffer[BUFFSIZE];
+    memset(buffer,0,BUFFSIZE);
     int numBytesRcvd;
-
     char code[8], ip_forward[INET_ADDRSTRLEN];
     float load=0.0;
-
     numBytesRcvd = recv(src, buffer, BUFFSIZE, 0);
     if(numBytesRcvd<0){
         DIE("recv control plane");
     }
     sscanf(buffer,"%s %s %f",code,ip_forward,&load);
-	printf("[buffer] %s\n",buffer);
+	printf("[CONTROL PLANE] New message from %d : %s",src,code);
 	if(strcmp(code,"NEW")==0){
 		add(fl, ip_forward, load);
 	}
@@ -205,7 +204,7 @@ int com(int src,int dst){
     if(send(dst, buffer, numBytesRcvd, 0)<0){
             DIE("send to forward");
     }
-    //printf("[SERVER %d -> %d] new message forwarded : \n",src,dst);
+    printf("[SERVER %d -> %d] new message forwarded\n",src,dst);
     //printf("%s\n",buffer);
     return 0;
 }
@@ -275,21 +274,19 @@ int main(int argc, char *argv[]){
 
     // INFINITE LOOP TO ALWAYS LISTEN TO 
     while(true){
-        printf("[SERVER] Waiting for new connection...\n");
         numEvents=epoll_wait(epoll_fd,events,MAXSOCKET,-1);
         if(numEvents==-1){
             printf("[SERVER] Fail to wait for event");
         }
         for(int i=0;i<numEvents;i++){
             src=events[i].data.fd;
-            printf("[SERVER] New fd connection %d\n",src);
-
             if(src==server_fd) {
                 // CONNECTION FROM A NEW CLIENT
                 client_fd=accept_new_client(server_fd);
                 fs=round_robin(&current_forward, forward_list);
-                printf("[SERVER %d] Attempt to connect forward server ",current_forward);
+                printf("[SERVER %d] Attempt to connect web server ",current_forward);
                 printf_ip(fs.ip);
+				printf("\n");
                 forward_fd=connect_new_forward(fs);
                 socket_map[forward_fd]=client_fd;
                 event.events = EPOLLIN;
