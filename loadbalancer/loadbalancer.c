@@ -63,9 +63,8 @@ void signal_handler(int signo)
 {
     if (signo == SIGTERM){
         printf("[SERVER] received SIGTERM\n");
-	exit 0;
+	exit(0);
     }
-    return 1;
 }
 
 

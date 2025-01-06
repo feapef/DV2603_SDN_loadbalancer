@@ -31,7 +31,11 @@ nginx &
 
 ## Modify the webhtml page
 echo $IP_ADDRESS
-for f in /opt/html/*; do envsubst < $f > $f-tmp ; mv $f-tmp $f ; done
+for f in /opt/html/*;do 
+	sed -i "s/HOSTNAME/$HOSTNAME/" $f
+	sed -i "s/IP_ADDRESS/$IP_ADDRESS/" $f
+done
+cat /opt/html/index.html
 
 CPU_USAGE="$(ps -eo %cpu --no-headers | awk '{s+=$1} END {print s}')"
 while ! send_message "NEW $IP_ADDRESS $CPU_USAGE" ; do 
