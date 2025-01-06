@@ -14,7 +14,6 @@ services:
       mode: replicated
       replicas: 3
       endpoint_mode: vip
-  stop_signal: SIGTERM
 
   loadbalancer:
     image: gcc

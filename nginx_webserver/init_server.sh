@@ -20,7 +20,7 @@ send_message (){
 
 ### TRAP
 # Catch docker container stop to execute a last command
-trap 'send_message "STOP $IP_ADDRESS";exit 1' SIGTERM
+trap 'send_message "STOP $IP_ADDRESS";exit 1' SIGTERM SIGQUIT 
 
 
 ### COMMANDS
