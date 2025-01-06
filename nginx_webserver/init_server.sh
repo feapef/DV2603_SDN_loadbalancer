@@ -4,10 +4,9 @@
 ACCESS_LOG="/var/log/nginx/access.log"
 
 INTERFACE=eth0
-HOSTNAME=webserver
-IP_ADDRESS=$(ip -4 addr show $INTERFACE| grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-export HOSTNAME
-export IP_ADDRESS
+
+export HOSTNAME=webserver
+export IP_ADDRESS=$(ip -4 addr show $INTERFACE| grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 
 CONTROL_PLANE_IP=$CONTROL_PLANE_IP
 CONTROL_PLANE_PORT=$CONTROL_PLANE_PORT

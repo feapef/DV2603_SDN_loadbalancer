@@ -167,29 +167,23 @@ void parse_cp(int src,linked_list *fl){
 
     char code[8], ip_forward[INET_ADDRSTRLEN];
     float load=0.0;
-    int nb_words;
 
     numBytesRcvd = recv(src, buffer, BUFFSIZE, 0);
     if(numBytesRcvd<0){
         DIE("recv control plane");
     }
-    nb_words=sscanf(buffer,"%s %s %f",code,ip_forward,&load);
-    if(nb_words==2){
-        if(strcmp(code,"STOP")==0){
-            rm(fl,ip_forward);
-        }
-        else { DIE("buffer pattern") }
-    }
-    else if (nb_words==3) {
-        if(strcmp(code,"NEW")==0){
-            add(fl, ip_forward, load);
-        }
-        else if (strcmp(code,"CHECK")==0){
-            set_load(fl, ip_forward, load);
-        }
-        else { DIE("buffer pattern") }
-    }
-    else { DIE("buffer pattern") }
+    sscanf(buffer,"%s %s %f",code,ip_forward,&load);
+	printf("[buffer] %s\n",buffer);
+	if(strcmp(code,"NEW")==0){
+		add(fl, ip_forward, load);
+	}
+	else if (strcmp(code,"CHECK")==0){
+		set_load(fl, ip_forward, load);
+	}
+	else if(strcmp(code,"STOP")==0){
+		rm(fl,ip_forward);
+	}
+	else { DIE("buffer pattern") }
 }
 
 int com(int src,int dst){
