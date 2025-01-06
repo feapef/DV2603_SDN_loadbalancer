@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall
 LDFLAGS =
-OBJFILES = linked_list.o loadbalancer_cp.o
+OBJFILES = linked_list.o loadbalancer.o
 TARGET = lb
 
 
