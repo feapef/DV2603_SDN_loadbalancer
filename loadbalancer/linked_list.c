@@ -59,10 +59,11 @@ int rm(linked_list *l, char ip[INET_ADDRSTRLEN]){
     // return 0 when the element is removed
     // return -1 if the element is not present in the list
     // return -2 if list is empty
-    node *current=l->first;
 	if (l->size==0){
 		return -2;
 	}
+    node *current=l->first;
+    node *tmp;
     if (strcmp(current->ip,ip)==0){
         // first element to remove
         l->first=current->next;
@@ -72,8 +73,9 @@ int rm(linked_list *l, char ip[INET_ADDRSTRLEN]){
     }
     for(int i=0;i<l->size-1;i++){
         if(strcmp(current->next->ip,ip)==0){
+	    tmp=current->next;
             current->next=current->next->next;
-            free(current->next);
+            free(tmp);
             l->size--;
             return 0;
         }

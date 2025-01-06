@@ -22,7 +22,7 @@ trap 'send_message "STOP $IP_ADDRESS";exit 1' SIGTERM SIGQUIT
 ### COMMANDS
 ## NGINX INIT
 # start nginx in daemon mode
-nginx 
+nginx &
 # nginx-debug for debugging
 
 ## CONTROL PLANE
