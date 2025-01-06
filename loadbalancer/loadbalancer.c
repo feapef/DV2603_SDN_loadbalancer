@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/epoll.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <netinet/ip.h>
 #include <netinet/in.h>
@@ -57,6 +58,16 @@ void printf_ip(struct in_addr a){
     printf("%s",ip); 
     return;
 }
+
+void signal_handler(int signo)
+{
+    if (signo == SIGTERM){
+        printf("[SERVER] received SIGTERM\n");
+	exit 0;
+    }
+    return 1;
+}
+
 
 int init_server(struct in_addr ip_server,int port_server){
     int option = 1;
@@ -237,6 +248,11 @@ int main(int argc, char *argv[]){
     // for the round robin count
     int current_forward=0;
 
+    // SET UP THE SIGNAL TRAP
+    if (signal(SIGTERM, signal_handler) == SIG_ERR) {
+    	printf("Error: Unable to catch SIGTERM\n");
+       	return 1;
+    }
 
     // INITIALIZE SERVER SOCKET
     inet_pton(AF_INET,IP_IN, &(addr_server));
@@ -274,6 +290,7 @@ int main(int argc, char *argv[]){
 
     // INFINITE LOOP TO ALWAYS LISTEN TO 
     while(true){
+
         numEvents=epoll_wait(epoll_fd,events,MAXSOCKET,-1);
         if(numEvents==-1){
             printf("[SERVER] Fail to wait for event");
